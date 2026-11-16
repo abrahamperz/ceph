@@ -59,6 +59,11 @@ def boto_connect(access_key, secret_key, config=None):
             # retry with ssl
             return try_connect('443', True, 'https')
 
+def index_key_name(key):
+    # the bucket index escapes object names that start with '_' by adding
+    # another '_'. 'radosgw-admin bi list --object' filters on that raw name
+    return '_' + key if key.startswith('_') else key
+
 def put_objects(bucket, key_list):
     objs = []
     for key in key_list:
@@ -82,7 +87,7 @@ def create_unlinked_objects(conn, bucket, key_list):
                 })
             except Exception as e:
                 log.debug(e)
-            out = exec_cmd(f'radosgw-admin bi list --bucket {bucket.name} --object {key}')
+            out = exec_cmd(f'radosgw-admin bi list --bucket {bucket.name} --object {index_key_name(key)}')
             instance_entries = filter(
                 lambda x: x['type'] == 'instance',
                 json.loads(out.replace(b'\x80', b'0x80')))

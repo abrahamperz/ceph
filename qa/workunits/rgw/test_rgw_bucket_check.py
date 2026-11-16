@@ -3,7 +3,7 @@
 import logging as log
 import json
 import botocore
-from common import exec_cmd, create_user, boto_connect, put_objects, create_unlinked_objects
+from common import exec_cmd, create_user, boto_connect, put_objects, create_unlinked_objects, index_key_name
 from botocore.config import Config
 
 """
@@ -50,8 +50,10 @@ def main():
 
     connection.BucketVersioning(BUCKET_NAME).enable()
 
-    ok_keys = ['a', 'b', 'c', 'd']
-    unlinked_keys = ['c', 'd', 'e', 'f']
+    # keys that start with '_' are escaped in the bucket index ('_g' is stored
+    # as '__g'), so include some to check that the fixes unescape them
+    ok_keys = ['a', 'b', 'c', 'd', '_g']
+    unlinked_keys = ['c', 'd', 'e', 'f', '_g', '_h']
     ok_objs = put_objects(bucket, ok_keys)
     
     # TESTCASE 'recalculated bucket check stats are correct'
@@ -128,7 +130,7 @@ def main():
         connection.ObjectVersion(bucket.name, o[0], o[1]).delete()
 
     for key in leftover_pending_xattr_keys:
-        out = exec_cmd(f'radosgw-admin bi list --bucket {BUCKET_NAME} --object {key}')
+        out = exec_cmd(f'radosgw-admin bi list --bucket {BUCKET_NAME} --object {index_key_name(key)}')
         idx_entries = json.loads(out.replace(b'\x80', b'0x80'))
         assert len(idx_entries) > 0, 'failed to create leftover OLH entries for key {key}'
         
@@ -145,7 +147,7 @@ def main():
     assert len(json_out) == len(leftover_pending_xattr_keys)
     
     for key in leftover_pending_xattr_keys:
-        out = exec_cmd(f'radosgw-admin bi list --bucket {BUCKET_NAME} --object {key}')
+        out = exec_cmd(f'radosgw-admin bi list --bucket {BUCKET_NAME} --object {index_key_name(key)}')
         idx_entries = json.loads(out.replace(b'\x80', b'0x80'))
         assert len(idx_entries) == 0, 'index entries still exist for key={key} after olh fix'
 
